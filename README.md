@@ -482,38 +482,6 @@ instead of making claims about how many fingers a person actually has.
 
 ---
 
-## Demo Requirement
-
-A short screen recording should demonstrate:
-
-* The program running from the terminal
-* The webcam window opening
-* Hand landmarks being drawn
-* Finger count changing live
-* At least one example of open and closed fingers
-
-Optional extra demo:
-
-* Multiple hands detected
-* Hand rotation display
-* Rejected duplicate or partial hand feedback
-
----
-
-## GitHub Submission Notes
-
-This repository should contain only source code and configuration files.
-
-Do not upload the assignment instruction document, screenshots, or private classroom files to this repository.
-
-Recommended repository name:
-
-```text
-i2i-Academy-ComputerVision-1
-```
-
----
-
 ## Summary
 
 This project satisfies the original Computer Vision assignment by detecting hands, extracting landmarks, determining open or closed fingers, and displaying the finger count live on the webcam feed.
