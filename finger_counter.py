@@ -323,7 +323,7 @@ def filter_valid_unique_hands(hand_landmarks_list):
             iou = calculate_iou(current_box, existing_box)
             center_distance = calculate_center_distance(current_box, existing_box)
 
-            if iou > 0.60 or (iou > 0.25 and center_distance < 0.08):
+            if iou > 0.35 or (iou > 0.15 and center_distance < 0.12):
                 is_duplicate = True
                 rejected_reasons.append("Duplicate hand")
                 break
@@ -334,42 +334,261 @@ def filter_valid_unique_hands(hand_landmarks_list):
 
     return valid_unique_hands, rejected_reasons
 
+def calculate_distance_to_xy(point, x, y):
+    """
+    Calculates 2D distance between a MediaPipe landmark and an x/y point.
+    """
+
+    dx = point.x - x
+    dy = point.y - y
+
+    return math.sqrt(dx ** 2 + dy ** 2)
+
+
+def get_palm_center(hand_landmarks):
+    """
+    Estimates the palm center using wrist and MCP landmarks.
+    """
+
+    landmarks = hand_landmarks.landmark
+    palm_ids = [0, 5, 9, 13, 17]
+
+    center_x = sum(landmarks[i].x for i in palm_ids) / len(palm_ids)
+    center_y = sum(landmarks[i].y for i in palm_ids) / len(palm_ids)
+
+    return center_x, center_y
+
+def get_hand_axis(hand_landmarks):
+    """
+    Returns a normalized 2D direction vector from wrist to middle MCP.
+    This represents the general direction of the hand/fingers.
+    """
+
+    landmarks = hand_landmarks.landmark
+
+    wrist = landmarks[0]
+    middle_mcp = landmarks[9]
+
+    axis_x = middle_mcp.x - wrist.x
+    axis_y = middle_mcp.y - wrist.y
+
+    magnitude = math.sqrt(axis_x ** 2 + axis_y ** 2)
+
+    if magnitude == 0:
+        return 0, -1
+
+    return axis_x / magnitude, axis_y / magnitude
+
+def get_lateral_axis(hand_landmarks):
+    """
+    Returns a sideways direction vector relative to the hand.
+
+    The hand axis points from wrist to middle MCP.
+    The lateral axis is perpendicular to that direction.
+    This helps check whether the thumb extends outside the palm.
+    """
+
+    axis_x, axis_y = get_hand_axis(hand_landmarks)
+
+    lateral_x = -axis_y
+    lateral_y = axis_x
+
+    return lateral_x, lateral_y
+
+def project_landmark_on_axis(landmark, origin, axis_x, axis_y):
+    """
+    Projects a landmark onto the hand axis.
+
+    Larger projection means the point is farther from the wrist
+    in the general finger direction.
+    """
+
+    dx = landmark.x - origin.x
+    dy = landmark.y - origin.y
+
+    return dx * axis_x + dy * axis_y
 
 def count_open_fingers(hand_landmarks):
     """
-    Counts open fingers using 3D joint angles.
+    Counts open fingers using:
+    1. 3D joint angles
+    2. Palm-relative distances
+    3. Projection along the hand direction axis
 
-    This avoids relying on MediaPipe's Right/Left hand label,
-    which can flip when the hand rotates.
+    The projection check helps prevent folded ring/pinky fingers
+    from being counted as open during gestures like a peace sign.
     """
 
     landmarks = hand_landmarks.landmark
     fingers = []
 
+    wrist = landmarks[0]
+    palm_size = estimate_palm_size(hand_landmarks)
+    palm_center_x, palm_center_y = get_palm_center(hand_landmarks)
+
+    axis_x, axis_y = get_hand_axis(hand_landmarks)
+
+     # ----------------------------
+    # Thumb logic
+    # ----------------------------
     thumb_angle = calculate_angle_3d(
         landmarks[2],
         landmarks[3],
         landmarks[4]
     )
 
-    thumb_is_open = thumb_angle > 145
-    fingers.append(1 if thumb_is_open else 0)
+    lateral_x, lateral_y = get_lateral_axis(hand_landmarks)
 
-    finger_joint_sets = [
-        (5, 6, 8),      # Index
-        (9, 10, 12),    # Middle
-        (13, 14, 16),   # Ring
-        (17, 18, 20),   # Pinky
+    palm_lateral_values = [
+        project_landmark_on_axis(landmarks[5], wrist, lateral_x, lateral_y),
+        project_landmark_on_axis(landmarks[9], wrist, lateral_x, lateral_y),
+        project_landmark_on_axis(landmarks[13], wrist, lateral_x, lateral_y),
+        project_landmark_on_axis(landmarks[17], wrist, lateral_x, lateral_y),
     ]
 
-    for mcp_id, pip_id, tip_id in finger_joint_sets:
-        finger_angle = calculate_angle_3d(
+    palm_lateral_min = min(palm_lateral_values)
+    palm_lateral_max = max(palm_lateral_values)
+    palm_lateral_center = sum(palm_lateral_values) / len(palm_lateral_values)
+
+    thumb_tip_lateral = project_landmark_on_axis(
+        landmarks[4],
+        wrist,
+        lateral_x,
+        lateral_y
+    )
+
+    thumb_mcp_lateral = project_landmark_on_axis(
+        landmarks[2],
+        wrist,
+        lateral_x,
+        lateral_y
+    )
+
+    palm_width = calculate_distance(landmarks[5], landmarks[17])
+
+    thumb_tip_to_palm_center = calculate_distance_to_xy(
+        landmarks[4],
+        palm_center_x,
+        palm_center_y
+    )
+
+    thumb_ip_to_palm_center = calculate_distance_to_xy(
+        landmarks[3],
+        palm_center_x,
+        palm_center_y
+    )
+
+    thumb_tip_to_index_mcp = calculate_distance(
+        landmarks[4],
+        landmarks[5]
+    )
+
+    # Decide which side of the palm the thumb belongs to.
+    # This avoids depending on MediaPipe's Right/Left label.
+    if thumb_mcp_lateral >= palm_lateral_center:
+        thumb_side = 1
+    else:
+        thumb_side = -1
+
+    # Directional thumb extension.
+    # Positive means the thumb tip extends outward from the thumb base.
+    thumb_directional_extension = (
+        thumb_tip_lateral - thumb_mcp_lateral
+    ) * thumb_side
+
+    # Check whether the thumb tip is near or outside the palm edge
+    # on the correct thumb side.
+    if thumb_side == 1:
+        thumb_outside_correct_side = (
+            thumb_tip_lateral > palm_lateral_max - palm_width * 0.05
+        )
+    else:
+        thumb_outside_correct_side = (
+            thumb_tip_lateral < palm_lateral_min + palm_width * 0.05
+        )
+
+    thumb_is_open = (
+        thumb_angle > 95 and
+        thumb_directional_extension > palm_width * 0.10 and
+        thumb_outside_correct_side and
+        thumb_tip_to_palm_center > thumb_ip_to_palm_center * 1.00 and
+        thumb_tip_to_index_mcp > palm_size * 0.25
+    )
+
+    fingers.append(1 if thumb_is_open else 0)
+
+    # ----------------------------
+    # Index, middle, ring, pinky
+    # ----------------------------
+    finger_joint_sets = [
+        (5, 6, 7, 8, 0.35),       # Index
+        (9, 10, 11, 12, 0.35),    # Middle
+        (13, 14, 15, 16, 0.45),   # Ring
+        (17, 18, 19, 20, 0.45),   # Pinky
+    ]
+
+    for mcp_id, pip_id, dip_id, tip_id, projection_threshold in finger_joint_sets:
+        pip_angle = calculate_angle_3d(
             landmarks[mcp_id],
             landmarks[pip_id],
+            landmarks[dip_id]
+        )
+
+        dip_angle = calculate_angle_3d(
+            landmarks[pip_id],
+            landmarks[dip_id],
             landmarks[tip_id]
         )
 
-        finger_is_open = finger_angle > 155
+        mcp_projection = project_landmark_on_axis(
+            landmarks[mcp_id],
+            wrist,
+            axis_x,
+            axis_y
+        )
+
+        pip_projection = project_landmark_on_axis(
+            landmarks[pip_id],
+            wrist,
+            axis_x,
+            axis_y
+        )
+
+        dip_projection = project_landmark_on_axis(
+            landmarks[dip_id],
+            wrist,
+            axis_x,
+            axis_y
+        )
+
+        tip_projection = project_landmark_on_axis(
+            landmarks[tip_id],
+            wrist,
+            axis_x,
+            axis_y
+        )
+
+        tip_to_palm_center = calculate_distance_to_xy(
+            landmarks[tip_id],
+            palm_center_x,
+            palm_center_y
+        )
+
+        pip_to_palm_center = calculate_distance_to_xy(
+            landmarks[pip_id],
+            palm_center_x,
+            palm_center_y
+        )
+
+        finger_is_open = (
+            pip_angle > 155 and
+            dip_angle > 150 and
+            tip_projection > dip_projection + palm_size * 0.10 and
+            tip_projection > pip_projection + palm_size * 0.18 and
+            tip_projection > mcp_projection + palm_size * projection_threshold and
+            tip_to_palm_center > pip_to_palm_center * 1.15
+        )
+
         fingers.append(1 if finger_is_open else 0)
 
     return sum(fingers), fingers
