@@ -1,24 +1,8 @@
-# i2i Academy Computer Vision - Dynamic Multi-Hand Finger Counter
+# Dynamic Multi-Hand Finger Counter
 
-This project is a real-time Computer Vision application developed for the i2i Academy Computer Vision assignment. It uses a webcam to detect human hands, extract hand landmark coordinates, determine whether fingers are open or closed, and display the number of detected open fingers directly on the video window.
+This project uses a webcam to detect human hands, extract hand landmark coordinates, determine whether fingers are open or closed, and display the number of detected open fingers directly on the video window.
 
 The application was built with Python, OpenCV, and MediaPipe.
-
----
-
-## Assignment Objective
-
-The original objective of this assignment was to build a real-time Computer Vision application using Python.
-
-The required application should:
-
-* Open the webcam and capture the live video feed frame by frame.
-* Use a pre-trained Computer Vision library to detect a hand.
-* Extract hand landmark or joint coordinates.
-* Create logical conditions to determine whether each finger is open or closed.
-* Display the final count of open fingers as live text directly on the video window.
-* Provide clean, well-commented Python code.
-* Include a short screen recording demonstrating that the application works.
 
 ---
 
@@ -120,16 +104,6 @@ This makes the application easier to debug and explain.
 
 ---
 
-## Difference Between Required Work and Added Improvements
-
-The required work focused on building a basic real-time finger counter using webcam input, hand detection, landmark extraction, finger-state logic, and live text display.
-
-The added improvements focused on making the project more robust and unique. These improvements include multi-hand support, configurable settings, duplicate filtering, hand-structure validation, 3D angle-based finger counting, hand rotation estimation, count smoothing, and rejected detection feedback.
-
-The final version therefore satisfies the original assignment requirements while also adding extra engineering features to improve stability, flexibility, and explainability.
-
----
-
 ## Technologies Used
 
 * Python
@@ -138,28 +112,6 @@ The final version therefore satisfies the original assignment requirements while
 * argparse
 * math
 * collections.deque
-
----
-
-## Project Structure
-
-```text
-i2i-Academy-ComputerVision-1/
-│
-├── finger_counter.py
-├── requirements.txt
-├── README.md
-└── .gitignore
-```
-
-### File Descriptions
-
-| File                | Description                      |
-| ------------------- | -------------------------------- |
-| `finger_counter.py` | Main Python application          |
-| `requirements.txt`  | Python dependency list           |
-| `README.md`         | Project documentation            |
-| `.gitignore`        | Files and folders ignored by Git |
 
 ---
 
@@ -479,17 +431,3 @@ Detected Open Fingers
 ```
 
 instead of making claims about how many fingers a person actually has.
-
----
-
-## Summary
-
-This project satisfies the original Computer Vision assignment by detecting hands, extracting landmarks, determining open or closed fingers, and displaying the finger count live on the webcam feed.
-
-It also adds extra features such as multi-hand support, configurable settings, hand-structure validation, duplicate filtering, rotation estimation, and count smoothing to make the application more stable and explainable.
-
----
-
-## Author
-
-Developed as part of the i2i Academy Computer Vision homework.
